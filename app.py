@@ -1,4 +1,6 @@
-import streamlit as st
+import shutil
+from typing import List
+from fastapi import FastAPI, File, UploadFile
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
@@ -12,28 +14,30 @@ from dotenv import load_dotenv
 from langchain_community.output_parsers.rail_parser import GuardrailsOutputParser
 from langchain_community.vectorstores.faiss import FAISS
 from fpdf import FPDF
-
+from langchain_community.vectorstores import FAISS
 
 load_dotenv()
-os.getenv("GOOGLE_API_KEY")
+
+app = FastAPI()
+
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def convert_to_pdf(input_files):
     pdfs = []
     for file in input_files:
-        file_extension = os.path.splitext(file.name)[1].lower()
+        file_extension = os.path.splitext(file.filename)[1].lower()
         if file_extension == '.pdf':
             # If the file is already a PDF, append its path directly
-            pdfs.append(file.name)
+            pdfs.append(file.filename)
         # Assuming the file is a text file, create a PDF with the same content
         else: 
             pdf = FPDF()
             pdf.add_page()
-            with open(file.name, 'r', encoding='utf-8') as f:
+            with open(file.filename, 'r', encoding='utf-8') as f:
                 content = f.read()
                 pdf.set_font("Arial", size=12)
                 pdf.multi_cell(0, 10, content)
-            output_file_path = file.name.replace(os.path.splitext(file.name)[1], '.pdf')
+            output_file_path = file.filename.replace(os.path.splitext(file.filename)[1], '.pdf')
             pdf.output(output_file_path)
             pdfs.append(output_file_path)
     return pdfs
@@ -74,35 +78,25 @@ def get_conversational_chain():
 
     return chain
 
-def user_input(user_question):
+@app.post("/upload/")
+async def process_pdf_files(files: List[UploadFile]):
+    pdf_docs = []
+    for file in files:
+        file_path = f"uploads/{file.filename}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        pdf_docs.append(file_path)
+
+    raw_text = get_pdf_text(pdf_docs)
+    text_chunks = get_text_chunks(raw_text)
+    get_vector_store(text_chunks)
+    return {"message": "PDF files processed successfully"}
+
+@app.post("/question/")
+async def ask_question(user_question: str):
     embeddings = GoogleGenerativeAIEmbeddings(model = "models/embedding-001")
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     docs = new_db.similarity_search(user_question)
     chain = get_conversational_chain()
     response = chain({"input_documents":docs, "question": user_question}, return_only_outputs=True)
-    print(response)
-    st.write("Reply: ", response["output_text"])
-
-def main():
-    st.set_page_config("Chat PDF")
-    st.header("Test bot")
-
-    user_question = st.text_input("Ask a Question from the PDF Files")
-
-    if user_question:
-        user_input(user_question)
-
-    with st.sidebar:
-        st.title("Menu:")
-        pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
-        if st.button("Submit & Process"):
-            with st.spinner("Processing..."):
-                # Convert dropped files to PDF
-                pdf_docs = convert_to_pdf(pdf_docs)
-                raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
-                get_vector_store(text_chunks)
-                st.success("Done")
-
-if __name__ == "__main__":
-    main()
+    return {"response": response["output_text"]}
