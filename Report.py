@@ -1,6 +1,4 @@
-import shutil
 from typing import List
-from fastapi import FastAPI, File, UploadFile
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
@@ -15,36 +13,32 @@ from langchain_community.output_parsers.rail_parser import GuardrailsOutputParse
 from langchain_community.vectorstores.faiss import FAISS
 from fpdf import FPDF
 from langchain_community.vectorstores import FAISS
+from fastapi import FastAPI, File, UploadFile
+from langchain_community.vectorstores import FAISS
 
 load_dotenv()
-
-app = FastAPI()
-
+os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def convert_to_pdf(input_files):
     pdfs = []
     for file in input_files:
-        file_path = f"uploads/{file.filename}"
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
         file_extension = os.path.splitext(file.filename)[1].lower()
         if file_extension == '.pdf':
             # If the file is already a PDF, append its path directly
-            pdfs.append(file_path)
+            pdfs.append(file.file)
         # Assuming the file is a text file, create a PDF with the same content
-        else: 
+        else:
             pdf = FPDF()
             pdf.add_page()
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with file.file as f:
                 content = f.read()
                 pdf.set_font("Arial", size=12)
-                pdf.multi_cell(0, 10, content)
-            output_file_path = file_path.replace(os.path.splitext(file.filename)[1], '.pdf')
+                pdf.multi_cell(0, 10, content.decode('utf-8'))
+            output_file_path = file.filename.replace(os.path.splitext(file.filename)[1], '.pdf')
             pdf.output(output_file_path)
             pdfs.append(output_file_path)
     return pdfs
-
 
 def get_pdf_text(pdf_docs):
     text=""
@@ -66,9 +60,12 @@ def get_vector_store(text_chunks):
 
 def get_conversational_chain():
     prompt_template = """
-    Your task is to compare two PDF's, one PDF contains project details, it will contain skills required section for the project
-    and other PDF will contain resume of a developer with skills section. Your task is to compare skills required for the project and 
-    developers skills and provide me a score out of 10, be as  creative as possible.
+    Your task is to generate a detailed report for atleast 10,000 words.
+    I will be dropping multiple pdf's contaning codebase. The repost must be very detailed, it should contain introduction, dependencies and how to install it,
+    the codebase summary, domain knowledge, quality of code and other metrics, Introduction, Background and Literature Review,
+    Problem Statement, Objectives, Methodology, System Design or Architecture, Implementation, Results and Analysis,
+    Discussion, Conclusion, Future Work, References. You are allowed to add more topics and 
+    broad headings as you feel convenient but the report must be very detailed adn elaborate.
     Context:\n {context}?\n
     Question: \n{question}\n
 
@@ -81,19 +78,22 @@ def get_conversational_chain():
 
     return chain
 
-@app.post("/upload/")
-async def process_pdf_files(files: List[UploadFile]):
-    pdf_docs = convert_to_pdf(files)
-    raw_text = get_pdf_text(pdf_docs)
-    text_chunks = get_text_chunks(raw_text)
-    get_vector_store(text_chunks)
-    return {"message": "PDF files processed successfully"}
-
-@app.post("/question/")
-async def ask_question(user_question: str):
+def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model = "models/embedding-001")
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     docs = new_db.similarity_search(user_question)
     chain = get_conversational_chain()
     response = chain({"input_documents":docs, "question": user_question}, return_only_outputs=True)
-    return {"response": response["output_text"]}
+    return response["output_text"]
+
+app = FastAPI()
+
+@app.post("/report/")
+async def generate_report(files: List[UploadFile] = File(...)):
+    pdf_docs = convert_to_pdf(files)
+    raw_text = get_pdf_text(pdf_docs)
+    text_chunks = get_text_chunks(raw_text)
+    get_vector_store(text_chunks)
+    user_question = "Generate a detailed report."
+    result = user_input(user_question)
+    return {"report": result}
