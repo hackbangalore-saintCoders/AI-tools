@@ -100,3 +100,6 @@ async def ask_question(user_question: str):
     chain = get_conversational_chain()
     response = chain({"input_documents":docs, "question": user_question}, return_only_outputs=True)
     return {"response": response["output_text"]}
+
+
+##fast api added
