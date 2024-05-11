@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from langchain_community.output_parsers.rail_parser import GuardrailsOutputParser
 from langchain_community.vectorstores.faiss import FAISS
 from fpdf import FPDF
+from langchain_community.vectorstores import FAISS
 
 load_dotenv()
 
@@ -79,9 +80,6 @@ def get_conversational_chain():
 
 @app.post("/upload/")
 async def process_pdf_files(files: List[UploadFile]):
-    if len(files) != 2:
-        return {"message": "Please upload exactly two PDF files."}
-
     pdf_docs = []
     for file in files:
         file_path = f"uploads/{file.filename}"
@@ -92,21 +90,13 @@ async def process_pdf_files(files: List[UploadFile]):
     raw_text = get_pdf_text(pdf_docs)
     text_chunks = get_text_chunks(raw_text)
     get_vector_store(text_chunks)
+    return {"message": "PDF files processed successfully"}
 
-    # Get the response once both PDF files are processed
-    response = get_comparison_score()
-    return {"response": response}
-
-
-def get_comparison_score():
+@app.post("/question/")
+async def ask_question(user_question: str):
     embeddings = GoogleGenerativeAIEmbeddings(model = "models/embedding-001")
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    docs = new_db.similarity_search("")
+    docs = new_db.similarity_search(user_question)
     chain = get_conversational_chain()
-    response = chain({"input_documents":docs}, return_only_outputs=True)
-    return response["output_text"]
-
-## Removed /question/ endpoint as it's not needed anymore
-
-##fast api added
-
+    response = chain({"input_documents":docs, "question": user_question}, return_only_outputs=True)
+    return {"response": response["output_text"]}
