@@ -41,10 +41,7 @@ def input_pdf_setup(uploaded_file):
 async def evaluate_resume(job_description: str, resume_pdf: UploadFile = File(...)):
     pdf_content = input_pdf_setup(resume_pdf)
     input_prompt_rejected = """
-    You are an experienced recruiter tasked with evaluating the provided resume against the job description. 
-    Unfortunately, the candidate does not meet the requirements for the role. 
-    Please make an email and provide feedback on the areas where the candidate's profile falls short. 
-    Highlight specific weaknesses and areas for improvement. Make it look very professional
+    As an experienced recruiter, you have been entrusted with the responsibility of thoroughly assessing resumes against specific job descriptions. However, in this scenario, the candidate's qualifications do not align with the requirements for the role. Craft a professional email providing constructive feedback to the candidate, delineating the specific areas in which their profile falls short and offering guidance for improvement. Your aim is to communicate respectfully while clearly outlining the deficiencies in their application.
     """
     response = get_gemini_response(job_description, pdf_content, input_prompt_rejected)
     return {"feedback": response}

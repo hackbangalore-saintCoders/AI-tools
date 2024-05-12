@@ -60,16 +60,12 @@ def get_vector_store(text_chunks):
 
 def get_conversational_chain():
     prompt_template = """
-    Your task is to generate a detailed report for atleast 10,000 words.
+    Your task is to generate a detailed report for atleast 3,000 words.
     I will be dropping multiple pdf's contaning codebase. The repost must be very detailed, it should contain introduction, dependencies and how to install it,
     the codebase summary, domain knowledge, quality of code and other metrics, Introduction, Background and Literature Review,
     Problem Statement, Objectives, Methodology, System Design or Architecture, Implementation, Results and Analysis,
     Discussion, Conclusion, Future Work, References. You are allowed to add more topics and 
     broad headings as you feel convenient but the report must be very detailed adn elaborate.
-    Context:\n {context}?\n
-    Question: \n{question}\n
-
-    Answer:
     """
 
     model = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", temperature=0.9)

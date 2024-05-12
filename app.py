@@ -40,10 +40,9 @@ def input_pdf_setup(uploaded_file):
 @app.post("/performance_metrics/")
 async def evaluate_resume(job_description: str, resume_pdf: UploadFile = File(...)):
     pdf_content = input_pdf_setup(resume_pdf)
-    input_prompt_rejected = """
-    Your task is to compare project details and resume and give me some metrics, job description will contain skills required section for the project
-    and other is a PDF that will contain resume of a developer with skills section. Your task is to compare skills required for the project and 
-    developers skills and provide me a score out of 100 percentage with a final score and feedback, be as  creative as possible.
-    """
+    input_prompt_rejected = """Your objective involves evaluating the proficiency of each 
+            skill listed in both the project description and the resume's skills section. Rate each skill on 
+            a scale from 1 to 10 based on its relevance and demonstrated capability. Ultimately, your task 
+            culminates in computing a comprehensive score, presented as a percentage out of 100."""
     response = get_gemini_response(job_description, pdf_content, input_prompt_rejected)
     return {"feedback": response}
